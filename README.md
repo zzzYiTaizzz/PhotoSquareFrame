@@ -48,7 +48,7 @@ PhotoSquareFrame 是一个跨平台图片处理工具（macOS / Windows），可
 
 ### macOS
 
-下载 `PhotoSquareFrame.dmg`，双击后将应用拖入“应用程序”文件夹即可。
+下载 `PhotoSquareFrame-macOS-arm64.dmg`，双击后将应用拖入“应用程序”文件夹即可。
 
 当前发布版本面向 Apple Silicon（arm64）Mac。由于应用未加入 Apple Developer 签名和公证，首次打开时如果 macOS 显示“无法验证开发者”，请右键点击应用并选择“打开”。
 

@@ -12,5 +12,6 @@ if [[ ! -x "$SCRIPT_DIR/.venv/bin/python" ]]; then
   exit 1
 fi
 "$SCRIPT_DIR/.venv/bin/python" -m PyInstaller --windowed --name PhotoSquareFrame --clean --noconfirm main.py
-hdiutil create -volname "PhotoSquareFrame" -srcfolder "dist/PhotoSquareFrame.app" -ov -format UDZO "$DESKTOP_DIR/PhotoSquareFrame.dmg"
-echo "Created: $DESKTOP_DIR/PhotoSquareFrame.dmg"
+DMG_NAME="PhotoSquareFrame-macOS-arm64.dmg"
+hdiutil create -volname "PhotoSquareFrame" -srcfolder "dist/PhotoSquareFrame.app" -ov -format UDZO "$DESKTOP_DIR/$DMG_NAME"
+echo "Created: $DESKTOP_DIR/$DMG_NAME"
