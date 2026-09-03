@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QVBoxLayout,
     QWidget,
@@ -25,10 +26,12 @@ from PySide6.QtWidgets import (
 SUPPORTED = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"}
 
 
-def add_square_frame(source: Path, percent: float) -> Image.Image:
-    """Fit the photo on a square white canvas and add a proportional frame."""
+def add_square_frame(source: Path, percent: float, rotation: int = 0) -> Image.Image:
+    """Rotate the photo, then fit it on a square white canvas with a frame."""
     with Image.open(source) as opened:
         image = ImageOps.exif_transpose(opened).convert("RGB")
+    if rotation % 360:
+        image = image.rotate(rotation, expand=True)
     width, height = image.size
     longest = max(width, height)
     frame = round(longest * percent / 100)
@@ -62,6 +65,18 @@ class DropPreview(QLabel):
     def __init__(self) -> None:
         super().__init__()
         self.setAcceptDrops(True)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return width
+
+    def sizeHint(self):
+        size = super().sizeHint()
+        side = max(size.width(), size.height(), 480)
+        return size.expandedTo(size.__class__(side, side))
 
     def dragEnterEvent(self, event) -> None:
         if any(Path(url.toLocalFile()).suffix.lower() in SUPPORTED for url in event.mimeData().urls()):
@@ -79,6 +94,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Photo Square Frame")
         self.resize(980, 650)
         self.paths: list[Path] = []
+        self.rotations: list[int] = []
 
         self.file_list = DropList()
         self.file_list.setMinimumWidth(260)
@@ -106,6 +122,15 @@ class MainWindow(QMainWindow):
         self.clear_button.clicked.connect(self.clear_paths)
         self.export_button = QPushButton("导出全部")
         self.export_button.clicked.connect(self.export_all)
+        rotate_button_side = self.add_button.sizeHint().height()
+        self.rotate_left_button = QPushButton("⟲")
+        self.rotate_left_button.setToolTip("左旋转")
+        self.rotate_left_button.setFixedSize(rotate_button_side, rotate_button_side)
+        self.rotate_left_button.clicked.connect(lambda: self.rotate_current(90))
+        self.rotate_right_button = QPushButton("⟳")
+        self.rotate_right_button.setToolTip("右旋转")
+        self.rotate_right_button.setFixedSize(rotate_button_side, rotate_button_side)
+        self.rotate_right_button.clicked.connect(lambda: self.rotate_current(-90))
 
         left = QVBoxLayout()
         left.addWidget(QLabel("图片列表"))
@@ -121,6 +146,8 @@ class MainWindow(QMainWindow):
         controls.addWidget(QLabel("边框宽度"))
         controls.addWidget(self.percent)
         controls.addWidget(self.percent_label)
+        controls.addWidget(self.rotate_left_button)
+        controls.addWidget(self.rotate_right_button)
         controls.addStretch()
         controls.addWidget(self.export_button)
         right.addLayout(controls)
@@ -141,6 +168,7 @@ class MainWindow(QMainWindow):
         for path in paths:
             if path.is_file() and path.suffix.lower() in SUPPORTED and path not in existing:
                 self.paths.append(path)
+                self.rotations.append(0)
                 self.file_list.addItem(QListWidgetItem(path.name))
                 existing.add(path)
                 added = True
@@ -149,15 +177,24 @@ class MainWindow(QMainWindow):
 
     def clear_paths(self) -> None:
         self.paths.clear()
+        self.rotations.clear()
         self.file_list.clear()
         self.preview.clear()
         self.preview.setText("选择或拖入图片")
+
+    def rotate_current(self, degrees: int) -> None:
+        row = self.file_list.currentRow()
+        if row < 0 or row >= len(self.paths):
+            return
+        self.rotations[row] = (self.rotations[row] + degrees) % 360
+        self.update_preview(row)
 
     def update_preview(self, row: int = -1) -> None:
         if row < 0 or row >= len(self.paths):
             return
         try:
-            output = add_square_frame(self.paths[row], self.percent.value())
+            rotation = self.rotations[row]
+            output = add_square_frame(self.paths[row], self.percent.value(), rotation)
             output.thumbnail((760, 520), Image.Resampling.LANCZOS)
             output.save("/tmp/photosquareframe-preview.jpg", quality=90)
             self.preview.setPixmap(QPixmap("/tmp/photosquareframe-preview.jpg"))
@@ -172,9 +209,9 @@ class MainWindow(QMainWindow):
         if not folder:
             return
         failed: list[str] = []
-        for source in self.paths:
+        for row, source in enumerate(self.paths):
             try:
-                output = add_square_frame(source, self.percent.value())
+                output = add_square_frame(source, self.percent.value(), self.rotations[row])
                 target = Path(folder) / f"{source.stem}_square{source.suffix.lower()}"
                 if target.suffix not in {".jpg", ".jpeg", ".png"}:
                     target = target.with_suffix(".jpg")
