@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -29,7 +30,12 @@ SUPPORTED = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"}
 def add_square_frame(source: Path, percent: float, rotation: int = 0) -> Image.Image:
     """Rotate the photo, then fit it on a square white canvas with a frame."""
     with Image.open(source) as opened:
-        image = ImageOps.exif_transpose(opened).convert("RGB")
+        image = ImageOps.exif_transpose(opened)
+    if image.mode in {"RGBA", "LA", "PA"} or (image.mode == "P" and "transparency" in image.info):
+        image = image.convert("RGBA")
+        background = Image.new("RGBA", image.size, (255, 255, 255, 255))
+        image = Image.alpha_composite(background, image)
+    image = image.convert("RGB")
     if rotation % 360:
         image = image.rotate(rotation, expand=True)
     width, height = image.size
@@ -196,8 +202,9 @@ class MainWindow(QMainWindow):
             rotation = self.rotations[row]
             output = add_square_frame(self.paths[row], self.percent.value(), rotation)
             output.thumbnail((760, 520), Image.Resampling.LANCZOS)
-            output.save("/tmp/photosquareframe-preview.jpg", quality=90)
-            self.preview.setPixmap(QPixmap("/tmp/photosquareframe-preview.jpg"))
+            preview_path = Path(tempfile.gettempdir()) / "photosquareframe-preview.jpg"
+            output.save(preview_path, quality=90)
+            self.preview.setPixmap(QPixmap(str(preview_path)))
         except Exception as exc:
             self.preview.setText(f"无法读取图片：{exc}")
 
