@@ -87,3 +87,14 @@ py -m venv .venv
 - Windows 生成 zip：在 PowerShell 中运行 `.\build_windows.ps1`，产物为 `dist\PhotoSquareFrame-Windows-x64.zip`，并会复制一份到桌面。
 
 应用构建产物位于 `dist/` 目录。
+
+## License
+
+PhotoSquareFrame is licensed under the MIT License.
+
+Copyright (c) 2026 zzzYiTaizzz and Dieryao
+
+See the [LICENSE](LICENSE) file for the full license text. The project name
+and logo are not granted as trademarks by the MIT License.
+
+第三方依赖的许可证信息见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
