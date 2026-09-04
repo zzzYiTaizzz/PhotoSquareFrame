@@ -37,7 +37,9 @@ foreach ($Dir in @("build", "dist")) {
     if (Test-Path $Path) { Remove-Item -Recurse -Force $Path }
 }
 
-$GeneratedVersionFile = Join-Path $PSScriptRoot "build\version_info.generated.txt"
+$Build = Join-Path $PSScriptRoot "build"
+New-Item -ItemType Directory -Path $Build -Force | Out-Null
+$GeneratedVersionFile = Join-Path $Build "version_info.generated.txt"
 $VersionTemplate = Get-Content (Join-Path $PSScriptRoot "assets\version_info.txt") -Raw
 $VersionParts = $AppVersion.Split('.')
 while ($VersionParts.Count -lt 4) { $VersionParts += "0" }
