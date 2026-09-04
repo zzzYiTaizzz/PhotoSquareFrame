@@ -1,7 +1,7 @@
 # Builds the Windows distribution of PhotoSquareFrame.
 #
-# Produces dist\PhotoSquareFrame\ and a zipped release archive at
-# dist\PhotoSquareFrame-Windows-x64-v1.2.0.zip, then copies the zip to the Desktop.
+# Produces dist\PhotoSquareFrame\ and a versioned zipped release archive,
+# then copies the zip to the Desktop.
 #
 # Usage (from PowerShell, repository root):
 #   .\build_windows.ps1
@@ -29,12 +29,21 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  .\.venv\Scripts\python.exe -m pip install -r requirements.txt"
     exit 1
 }
+$AppVersion = (& $Python -c "from version import APP_VERSION; print(APP_VERSION)").Trim()
 
 # Remove stale outputs so the bundle never inherits leftover files.
 foreach ($Dir in @("build", "dist")) {
     $Path = Join-Path $PSScriptRoot $Dir
     if (Test-Path $Path) { Remove-Item -Recurse -Force $Path }
 }
+
+$GeneratedVersionFile = Join-Path $PSScriptRoot "build\version_info.generated.txt"
+$VersionTemplate = Get-Content (Join-Path $PSScriptRoot "assets\version_info.txt") -Raw
+$VersionParts = $AppVersion.Split('.')
+while ($VersionParts.Count -lt 4) { $VersionParts += "0" }
+$FileVersion = "({0})" -f ($VersionParts[0..3] -join ', ')
+$VersionTemplate.Replace("__VERSION__", $AppVersion).Replace("__FILE_VERSION__", $FileVersion) |
+    Set-Content -Path $GeneratedVersionFile -Encoding utf8
 
 # 1) Bundle with PyInstaller (onedir, windowed). Flags mirror build_dmg.sh.
 & $Python -m PyInstaller `
@@ -44,7 +53,7 @@ foreach ($Dir in @("build", "dist")) {
     --onedir `
     --name PhotoSquareFrame `
     --icon (Join-Path $PSScriptRoot "assets\app_icon.ico") `
-    --version-file (Join-Path $PSScriptRoot "assets\version_info.txt") `
+    --version-file $GeneratedVersionFile `
     main.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -55,14 +64,15 @@ Copy-Item (Join-Path $PSScriptRoot "THIRD_PARTY_LICENSES.md") (Join-Path $Bundle
 Copy-Item -Recurse (Join-Path $PSScriptRoot "licenses") (Join-Path $Bundle "licenses")
 
 # 3) Zip the bundle into a distributable archive.
-& $Python -c "import shutil; shutil.make_archive(r'$PSScriptRoot\dist\PhotoSquareFrame-Windows-x64-v1.2.0', 'zip', r'$PSScriptRoot\dist', 'PhotoSquareFrame')"
+& $Python -c "import shutil; shutil.make_archive(r'$PSScriptRoot\dist\PhotoSquareFrame-Windows-x64-v$AppVersion', 'zip', r'$PSScriptRoot\dist', 'PhotoSquareFrame')"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # 4) Copy the zip to the Desktop for convenience.
-$Zip = Join-Path $PSScriptRoot "dist\PhotoSquareFrame-Windows-x64-v1.2.0.zip"
+$Zip = Join-Path $PSScriptRoot "dist\PhotoSquareFrame-Windows-x64-v$AppVersion.zip"
 $Desktop = [Environment]::GetFolderPath("Desktop")
-Copy-Item -Force $Zip (Join-Path $Desktop "PhotoSquareFrame-Windows-x64-v1.2.0.zip")
+$DesktopZip = Join-Path $Desktop "PhotoSquareFrame-Windows-x64-v$AppVersion.zip"
+Copy-Item -Force $Zip $DesktopZip
 
 Write-Host ""
 Write-Host "Created:  $Zip"
-Write-Host "Desktop:  $(Join-Path $Desktop 'PhotoSquareFrame-Windows-x64-v1.2.0.zip')"
+Write-Host "Desktop:  $DesktopZip"

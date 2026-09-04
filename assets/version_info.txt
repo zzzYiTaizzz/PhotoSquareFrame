@@ -3,8 +3,8 @@
 
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 2, 0, 0),
-    prodvers=(1, 2, 0, 0),
+    filevers=__FILE_VERSION__,
+    prodvers=__FILE_VERSION__,
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -18,11 +18,11 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', 'PhotoSquareFrame contributors'),
          StringStruct('FileDescription', 'Photo Square Frame'),
-         StringStruct('FileVersion', '1.2.0'),
+         StringStruct('FileVersion', '__VERSION__'),
          StringStruct('InternalName', 'PhotoSquareFrame.exe'),
          StringStruct('OriginalFilename', 'PhotoSquareFrame.exe'),
          StringStruct('ProductName', 'Photo Square Frame'),
-         StringStruct('ProductVersion', '1.2.0')]
+         StringStruct('ProductVersion', '__VERSION__')]
       )]
     ),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
