@@ -8,6 +8,7 @@ import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -28,6 +29,10 @@ class UpdateInfo:
     title: str
     notes: str
     asset: ReleaseAsset
+
+
+class UpdateCheckError(Exception):
+    """Raised when GitHub cannot provide a usable update response."""
 
 
 def _version_tuple(value: str) -> tuple[int, ...]:
@@ -52,8 +57,15 @@ def fetch_update(timeout: int = 8) -> UpdateInfo | None:
         f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest",
         headers={"Accept": "application/vnd.github+json", "User-Agent": "PhotoSquareFrame"},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        release = json.load(response)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            release = json.load(response)
+    except urllib.error.HTTPError as error:
+        raise UpdateCheckError(_format_http_error(error)) from error
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise UpdateCheckError("无法连接 GitHub，请检查网络连接后重试。") from error
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise UpdateCheckError("GitHub 返回的数据无法解析，请稍后重试。") from error
 
     if release.get("draft") or release.get("prerelease"):
         return None
@@ -76,7 +88,7 @@ def fetch_update(timeout: int = 8) -> UpdateInfo | None:
                 notes=str(release.get("body") or ""),
                 asset=ReleaseAsset(name, url, digest.removeprefix("sha256:"), int(item.get("size") or 0)),
             )
-    return None
+    raise UpdateCheckError(f"已发现 v{latest}，但该版本没有可用的当前平台安装包。")
 
 
 def download_update(info: UpdateInfo, progress: Callable[[int], None] | None = None) -> Path:
@@ -105,9 +117,39 @@ def download_update(info: UpdateInfo, progress: Callable[[int], None] | None = N
     return target
 
 
+def _format_http_error(error: urllib.error.HTTPError) -> str:
+    body = ""
+    try:
+        body = error.read().decode("utf-8", errors="replace")
+    except Exception:
+        pass
+    try:
+        message = str(json.loads(body).get("message", "")).lower()
+    except (json.JSONDecodeError, AttributeError):
+        message = body.lower()
+
+    headers = error.headers or {}
+    remaining = headers.get("X-RateLimit-Remaining", "")
+    if error.code == 403 and ("rate limit" in message or remaining == "0"):
+        reset = headers.get("X-RateLimit-Reset", "")
+        try:
+            reset_at = datetime.fromtimestamp(int(reset), tz=timezone.utc).astimezone()
+            reset_text = reset_at.strftime("%H:%M")
+            return f"GitHub API 请求次数已达上限，请在 {reset_text} 后重试。"
+        except (TypeError, ValueError, OverflowError, OSError):
+            return "GitHub API 请求次数已达上限，请稍后重试。"
+    if error.code == 403:
+        return "GitHub 拒绝了更新检查请求（HTTP 403），请稍后重试。"
+    if error.code == 404:
+        return "找不到 GitHub 更新信息（HTTP 404），请稍后重试。"
+    return f"GitHub 返回错误（HTTP {error.code}），请稍后重试。"
+
+
 def format_error(error: Exception) -> str:
+    if isinstance(error, UpdateCheckError):
+        return str(error)
     if isinstance(error, urllib.error.HTTPError):
-        return f"GitHub 返回错误（HTTP {error.code}）。"
+        return _format_http_error(error)
     if isinstance(error, urllib.error.URLError):
-        return "无法连接 GitHub，请检查网络连接。"
-    return str(error) or "检查更新失败。"
+        return "无法连接 GitHub，请检查网络连接后重试。"
+    return str(error) or "检查更新失败，请稍后重试。"
