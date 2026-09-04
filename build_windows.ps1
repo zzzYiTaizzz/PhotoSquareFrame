@@ -1,7 +1,7 @@
 # Builds the Windows distribution of PhotoSquareFrame.
 #
 # Produces dist\PhotoSquareFrame\ and a zipped release archive at
-# dist\PhotoSquareFrame-Windows-x64.zip, then copies the zip to the Desktop.
+# dist\PhotoSquareFrame-Windows-x64-v1.2.0.zip, then copies the zip to the Desktop.
 #
 # Usage (from PowerShell, repository root):
 #   .\build_windows.ps1
@@ -48,15 +48,21 @@ foreach ($Dir in @("build", "dist")) {
     main.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# 2) Zip the bundle into a distributable archive.
-& $Python -c "import shutil; shutil.make_archive(r'$PSScriptRoot\dist\PhotoSquareFrame-Windows-x64', 'zip', r'$PSScriptRoot\dist', 'PhotoSquareFrame')"
+# 2) Include license notices in the distributable bundle.
+$Bundle = Join-Path $PSScriptRoot "dist\PhotoSquareFrame"
+Copy-Item (Join-Path $PSScriptRoot "LICENSE") (Join-Path $Bundle "LICENSE.txt")
+Copy-Item (Join-Path $PSScriptRoot "THIRD_PARTY_LICENSES.md") (Join-Path $Bundle "THIRD_PARTY_LICENSES.txt")
+Copy-Item -Recurse (Join-Path $PSScriptRoot "licenses") (Join-Path $Bundle "licenses")
+
+# 3) Zip the bundle into a distributable archive.
+& $Python -c "import shutil; shutil.make_archive(r'$PSScriptRoot\dist\PhotoSquareFrame-Windows-x64-v1.2.0', 'zip', r'$PSScriptRoot\dist', 'PhotoSquareFrame')"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# 3) Copy the zip to the Desktop for convenience.
-$Zip = Join-Path $PSScriptRoot "dist\PhotoSquareFrame-Windows-x64.zip"
+# 4) Copy the zip to the Desktop for convenience.
+$Zip = Join-Path $PSScriptRoot "dist\PhotoSquareFrame-Windows-x64-v1.2.0.zip"
 $Desktop = [Environment]::GetFolderPath("Desktop")
-Copy-Item -Force $Zip (Join-Path $Desktop "PhotoSquareFrame-Windows-x64.zip")
+Copy-Item -Force $Zip (Join-Path $Desktop "PhotoSquareFrame-Windows-x64-v1.2.0.zip")
 
 Write-Host ""
 Write-Host "Created:  $Zip"
-Write-Host "Desktop:  $(Join-Path $Desktop 'PhotoSquareFrame-Windows-x64.zip')"
+Write-Host "Desktop:  $(Join-Path $Desktop 'PhotoSquareFrame-Windows-x64-v1.2.0.zip')"

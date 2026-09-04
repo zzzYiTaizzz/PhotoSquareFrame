@@ -48,13 +48,13 @@ PhotoSquareFrame 是一个跨平台图片处理工具（macOS / Windows），可
 
 ### macOS
 
-下载 `PhotoSquareFrame-macOS-arm64.dmg`，双击后将应用拖入“应用程序”文件夹即可。
+下载 `PhotoSquareFrame-macOS-arm64-v1.2.0.dmg`，双击后将应用拖入“应用程序”文件夹即可。
 
 当前发布版本面向 Apple Silicon（arm64）Mac。由于应用未加入 Apple Developer 签名和公证，首次打开时如果 macOS 显示“无法验证开发者”，请右键点击应用并选择“打开”。
 
 ### Windows
 
-下载 `PhotoSquareFrame-Windows-x64.zip`，解压后运行其中的 `PhotoSquareFrame.exe`。适用于 64 位 Windows 10 / 11。
+下载 `PhotoSquareFrame-Windows-x64-v1.2.0.zip`，解压后运行其中的 `PhotoSquareFrame.exe`。适用于 64 位 Windows 10 / 11。
 
 程序未进行代码签名，首次运行时 Windows SmartScreen 可能提示“Windows 已保护你的电脑”；如确认文件来源可信，点击“更多信息”->“仍要运行”。可通过 Releases 说明中附带的 SHA-256 值校验下载文件的完整性。
 
@@ -84,7 +84,7 @@ py -m venv .venv
 ### 打包
 
 - macOS 生成 DMG：运行 `./build_dmg.sh`，产物在桌面。
-- Windows 生成 zip：在 PowerShell 中运行 `.\build_windows.ps1`，产物为 `dist\PhotoSquareFrame-Windows-x64.zip`，并会复制一份到桌面。
+- Windows 生成 zip：在 PowerShell 中运行 `.\build_windows.ps1`，产物为 `dist\PhotoSquareFrame-Windows-x64-v1.2.0.zip`，并会复制一份到桌面。
 
 Windows 程序文件名保持为 `PhotoSquareFrame.exe`，文件属性中的产品名称显示为 `Photo Square Frame`。
 

@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import sys
+import os
+import subprocess
 import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QThread, Qt, Signal, QTimer
+from PySide6.QtGui import QFontDatabase, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -16,6 +20,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
+    QProgressDialog,
     QPushButton,
     QSizePolicy,
     QSlider,
@@ -23,8 +29,44 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from updater import UpdateInfo, download_update, fetch_update, format_error
+from version import APP_VERSION
+
 
 SUPPORTED = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"}
+
+
+class UpdateCheckWorker(QThread):
+    found = Signal(object)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            self.found.emit(fetch_update())
+        except Exception as exc:
+            self.failed.emit(format_error(exc))
+
+
+class UpdateDownloadWorker(QThread):
+    progress = Signal(int)
+    completed = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, info: UpdateInfo) -> None:
+        super().__init__()
+        self.info = info
+
+    def run(self) -> None:
+        try:
+            path = download_update(self.info, self.emit_progress)
+            self.completed.emit(str(path))
+        except Exception as exc:
+            self.failed.emit(format_error(exc))
+
+    def emit_progress(self, value: int) -> None:
+        if self.isInterruptionRequested():
+            raise InterruptedError("下载已取消。")
+        self.progress.emit(value)
 
 
 def add_square_frame(source: Path, percent: float, rotation: int = 0) -> Image.Image:
@@ -101,6 +143,16 @@ class MainWindow(QMainWindow):
         self.resize(980, 650)
         self.paths: list[Path] = []
         self.rotations: list[int] = []
+        self.update_check_worker: UpdateCheckWorker | None = None
+        self.update_download_worker: UpdateDownloadWorker | None = None
+        self.update_info: UpdateInfo | None = None
+        self.update_progress: QProgressDialog | None = None
+
+        help_menu = self.menuBar().addMenu("帮助")
+        about_action = help_menu.addAction("关于 Photo Square Frame")
+        about_action.triggered.connect(self.show_about)
+        check_update_action = help_menu.addAction("检查更新")
+        check_update_action.triggered.connect(lambda: self.check_for_updates(False))
 
         self.file_list = DropList()
         self.file_list.setMinimumWidth(260)
@@ -163,6 +215,121 @@ class MainWindow(QMainWindow):
         layout.addLayout(left)
         layout.addLayout(right, 1)
         self.setCentralWidget(root)
+        QTimer.singleShot(1500, lambda: self.check_for_updates(True))
+
+    def show_about(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("关于 Photo Square Frame")
+        dialog.setMinimumWidth(440)
+
+        layout = QVBoxLayout(dialog)
+        title = QLabel("Photo Square Frame")
+        title.setStyleSheet("font-size:20px; font-weight:bold;")
+        layout.addWidget(title)
+        layout.addWidget(QLabel(f"版本：v{APP_VERSION}"))
+        layout.addWidget(QLabel("Copyright (c) 2026 zzzYiTaizzz and Dieryao"))
+        layout.addWidget(QLabel("Licensed under the MIT License."))
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        license_button = buttons.addButton("查看许可证", QDialogButtonBox.ButtonRole.ActionRole)
+        update_button = buttons.addButton("检查更新", QDialogButtonBox.ButtonRole.ActionRole)
+        license_button.clicked.connect(lambda _checked=False: self.show_license(dialog))
+        update_button.clicked.connect(lambda _checked=False: (dialog.close(), self.check_for_updates(False)))
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
+
+    def show_license(self, parent: QWidget) -> None:
+        candidates = [
+            Path(__file__).with_name("LICENSE"),
+            Path(sys.executable).parent / "LICENSE.txt",
+            Path(sys.executable).parent.parent / "Resources" / "LICENSE.txt",
+        ]
+        text = "许可证文件未找到。"
+        for candidate in candidates:
+            if candidate.is_file():
+                text = candidate.read_text(encoding="utf-8")
+                break
+        dialog = QDialog(parent)
+        dialog.setWindowTitle("MIT License")
+        dialog.setMinimumSize(820, 560)
+        layout = QVBoxLayout(dialog)
+        license_view = QPlainTextEdit()
+        license_view.setReadOnly(True)
+        license_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        license_view.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        license_view.setPlainText(text)
+        layout.addWidget(license_view)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
+
+    def check_for_updates(self, silent: bool = False) -> None:
+        if self.update_check_worker and self.update_check_worker.isRunning():
+            return
+        self.update_check_worker = UpdateCheckWorker()
+        self.update_check_worker.found.connect(lambda info: self.update_check_finished(info, silent))
+        self.update_check_worker.failed.connect(lambda message: self.update_check_failed(message, silent))
+        self.update_check_worker.start()
+
+    def update_check_finished(self, info: UpdateInfo | None, silent: bool) -> None:
+        if info is None:
+            if not silent:
+                QMessageBox.information(self, "检查更新", f"当前已是最新版本（v{APP_VERSION}）。")
+            return
+        self.update_info = info
+        notes = info.notes.strip()
+        if len(notes) > 800:
+            notes = notes[:800].rstrip() + "..."
+        details = f"发现新版本 v{info.version}\n\n{notes}" if notes else f"发现新版本 v{info.version}。"
+        answer = QMessageBox.question(self, "发现新版本", details + "\n\n是否下载更新？")
+        if answer == QMessageBox.StandardButton.Yes:
+            self.download_update()
+
+    def update_check_failed(self, message: str, silent: bool) -> None:
+        if not silent:
+            QMessageBox.warning(self, "检查更新失败", message)
+
+    def download_update(self) -> None:
+        if not self.update_info or (self.update_download_worker and self.update_download_worker.isRunning()):
+            return
+        self.update_progress = QProgressDialog("正在下载更新...", "取消", 0, 100, self)
+        self.update_progress.setWindowTitle("下载更新")
+        self.update_progress.setAutoClose(False)
+        self.update_progress.setValue(0)
+        self.update_progress.canceled.connect(self.cancel_update_download)
+        self.update_download_worker = UpdateDownloadWorker(self.update_info)
+        self.update_download_worker.progress.connect(self.update_progress.setValue)
+        self.update_download_worker.completed.connect(self.update_download_finished)
+        self.update_download_worker.failed.connect(self.update_download_failed)
+        self.update_download_worker.start()
+
+    def cancel_update_download(self) -> None:
+        if self.update_download_worker and self.update_download_worker.isRunning():
+            self.update_download_worker.requestInterruption()
+        if self.update_progress:
+            self.update_progress.close()
+
+    def update_download_finished(self, path: str) -> None:
+        if self.update_progress:
+            self.update_progress.close()
+        update_path = Path(path)
+        QMessageBox.information(self, "下载完成", f"更新文件已校验完成：\n{update_path.name}")
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", str(update_path)])
+            elif sys.platform == "win32":
+                os.startfile(str(update_path))
+            else:
+                subprocess.Popen(["xdg-open", str(update_path)])
+        except Exception as exc:
+            QMessageBox.warning(self, "打开更新文件失败", str(exc))
+
+    def update_download_failed(self, message: str) -> None:
+        if self.update_progress:
+            self.update_progress.close()
+        QMessageBox.warning(self, "下载更新失败", message)
 
     def choose_files(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(self, "选择图片", "", "图片 (*.jpg *.jpeg *.png *.tif *.tiff *.webp *.bmp)")
