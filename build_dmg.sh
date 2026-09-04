@@ -21,16 +21,21 @@ APP_VERSION="$($SCRIPT_DIR/.venv/bin/python -c 'from version import APP_VERSION;
   main.py
 # Keep the release filename script-friendly while showing the human-readable
 # product name in Finder and the Dock.
-APP_PLIST="dist/PhotoSquareFrame.app/Contents/Info.plist"
+APP_PATH="dist/PhotoSquareFrame.app"
+APP_PLIST="$APP_PATH/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleName 'Photo Square Frame'" "$APP_PLIST"
 /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 'Photo Square Frame'" "$APP_PLIST"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString '$APP_VERSION'" "$APP_PLIST"
 /usr/libexec/PlistBuddy -c "Delete :CFBundleVersion" "$APP_PLIST" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string '$APP_VERSION'" "$APP_PLIST"
-APP_RESOURCES="dist/PhotoSquareFrame.app/Contents/Resources"
+APP_RESOURCES="$APP_PATH/Contents/Resources"
 cp "$SCRIPT_DIR/LICENSE" "$APP_RESOURCES/LICENSE.txt"
 cp "$SCRIPT_DIR/THIRD_PARTY_LICENSES.md" "$APP_RESOURCES/THIRD_PARTY_LICENSES.txt"
 cp -R "$SCRIPT_DIR/licenses" "$APP_RESOURCES/licenses"
+# PyInstaller signs the bundle before these metadata and resource changes.
+# Re-sign the final bundle so its code signature covers the shipped contents.
+codesign --force --sign - "$APP_PATH"
+codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 DMG_NAME="PhotoSquareFrame-macOS-arm64-v$APP_VERSION.dmg"
-hdiutil create -volname "PhotoSquareFrame" -srcfolder "dist/PhotoSquareFrame.app" -ov -format UDZO "$DESKTOP_DIR/$DMG_NAME"
+hdiutil create -volname "PhotoSquareFrame" -srcfolder "$APP_PATH" -ov -format UDZO "$DESKTOP_DIR/$DMG_NAME"
 echo "Created: $DESKTOP_DIR/$DMG_NAME"
