@@ -86,7 +86,13 @@ py -m venv .venv
 - macOS 生成 DMG：运行 `./build_dmg.sh`，产物在桌面。
 - Windows 生成 zip：在 PowerShell 中运行 `.\build_windows.ps1`，产物为 `dist\PhotoSquareFrame-Windows-x64.zip`，并会复制一份到桌面。
 
+Windows 程序文件名保持为 `PhotoSquareFrame.exe`，文件属性中的产品名称显示为 `Photo Square Frame`。
+
 应用构建产物位于 `dist/` 目录。
+
+### 应用图标
+
+打包脚本使用 `assets/app_icon.icns`（macOS）和 `assets/app_icon.ico`（Windows）作为应用图标。两种文件均由项目图标 PNG 生成。
 
 ## License
 

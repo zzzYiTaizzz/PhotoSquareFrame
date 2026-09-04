@@ -37,7 +37,15 @@ foreach ($Dir in @("build", "dist")) {
 }
 
 # 1) Bundle with PyInstaller (onedir, windowed). Flags mirror build_dmg.sh.
-& $Python -m PyInstaller --noconfirm --clean --windowed --onedir --name PhotoSquareFrame main.py
+& $Python -m PyInstaller `
+    --noconfirm `
+    --clean `
+    --windowed `
+    --onedir `
+    --name PhotoSquareFrame `
+    --icon (Join-Path $PSScriptRoot "assets\app_icon.ico") `
+    --version-file (Join-Path $PSScriptRoot "assets\version_info.txt") `
+    main.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # 2) Zip the bundle into a distributable archive.
